@@ -42,6 +42,9 @@ public class User {
     @Column(length = 20, unique = true)
     private String phone;
 
+    @Column(length = 500)
+    private String cvUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private AccountRole role;

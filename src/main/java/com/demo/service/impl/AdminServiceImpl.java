@@ -27,13 +27,15 @@ public class AdminServiceImpl implements AdminService {
     private final JobRepository jobRepository;
     private final PasswordEncoder passwordEncoder;
 
+    // Admin tìm kiếm danh sách người dùng theo username hoặc fullName.
     @Override
     public Page<UserResponse> getUsers(String keyword, Pageable pageable) {
         String search = keyword == null ? "" : keyword.trim();
-        return userRepository.findByUsernameContainingIgnoreCaseOrFullNameContainingIgnoreCase(search, search, pageable)
+        return userRepository.searchUsers(search, pageable)
                 .map(this::toUserResponse);
     }
 
+    // Admin tạo tài khoản mới và mã hóa mật khẩu.
     @Override
     @Transactional
     public UserResponse createUser(UserCreateRequest request) {
@@ -50,6 +52,7 @@ public class AdminServiceImpl implements AdminService {
         return toUserResponse(userRepository.save(user));
     }
 
+    // Admin cập nhật thông tin tài khoản người dùng.
     @Override
     @Transactional
     public UserResponse updateUser(Long id, UserUpdateRequest request) {
@@ -64,6 +67,7 @@ public class AdminServiceImpl implements AdminService {
         return toUserResponse(user);
     }
 
+    // Admin khóa tài khoản thay vì xóa hẳn khỏi database.
     @Override
     @Transactional
     public void deleteUser(Long id) {
@@ -71,6 +75,7 @@ public class AdminServiceImpl implements AdminService {
         user.setEnabled(false);
     }
 
+    // Admin xem danh sách tin, có thể tìm theo keyword hoặc lọc theo status.
     @Override
     public Page<JobResponse> getJobs(String keyword, JobStatus status, Pageable pageable) {
         if (status != null) {
@@ -80,6 +85,7 @@ public class AdminServiceImpl implements AdminService {
         return jobRepository.findByTitleContainingIgnoreCase(search, pageable).map(this::toJobResponse);
     }
 
+    // Admin duyệt hoặc từ chối tin tuyển dụng.
     @Override
     @Transactional
     public JobResponse updateJobStatus(Long id, JobStatusRequest request) {
@@ -89,11 +95,13 @@ public class AdminServiceImpl implements AdminService {
         return toJobResponse(job);
     }
 
+    // Tìm user theo id, không có thì ném lỗi 404.
     private User findUser(Long id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng"));
     }
 
+    // Kiểm tra dữ liệu tạo user mới không bị trùng.
     private void validateNewUser(String username, String email, String phone) {
         if (userRepository.existsByUsername(username)) {
             throw new ConflictException("Tên đăng nhập đã tồn tại");
@@ -106,6 +114,7 @@ public class AdminServiceImpl implements AdminService {
         }
     }
 
+    // Kiểm tra dữ liệu cập nhật user không trùng với user khác.
     private void validateUpdateUser(Long id, String username, String email, String phone) {
         if (userRepository.existsByUsernameAndIdNot(username, id)) {
             throw new ConflictException("Tên đăng nhập đã tồn tại");
@@ -118,6 +127,7 @@ public class AdminServiceImpl implements AdminService {
         }
     }
 
+    // Chuyển entity User sang UserResponse để ẩn password.
     private UserResponse toUserResponse(User user) {
         return UserResponse.builder()
                 .id(user.getId())
@@ -125,11 +135,13 @@ public class AdminServiceImpl implements AdminService {
                 .fullName(user.getFullName())
                 .email(user.getEmail())
                 .phone(user.getPhone())
+                .cvUrl(user.getCvUrl())
                 .role(user.getRole())
                 .enabled(user.getEnabled())
                 .build();
     }
 
+    // Chuyển entity Job sang JobResponse trả về cho client.
     private JobResponse toJobResponse(Job job) {
         return JobResponse.builder()
                 .id(job.getId())

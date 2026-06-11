@@ -1,9 +1,11 @@
 package com.demo.service.impl;
 
 import com.demo.exception.ConflictException;
+import com.demo.exception.BadRequestException;
 import com.demo.exception.NotFoundException;
 import com.demo.model.dto.request.ApplicationRequest;
 import com.demo.model.dto.response.ApplicationResponse;
+import com.demo.model.dto.response.CvUploadResponse;
 import com.demo.model.dto.response.JobResponse;
 import com.demo.model.entity.Application;
 import com.demo.model.entity.ApplicationStatus;
@@ -21,17 +23,25 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 public class CandidateServiceImpl implements CandidateService {
+    private static final long MAX_CV_SIZE = 15 * 1024 * 1024;
+
     private final JobRepository jobRepository;
     private final UserRepository userRepository;
     private final ApplicationRepository applicationRepository;
 
+    // Ứng viên tìm các tin đã duyệt, đang active và có tiêu đề chứa keyword.
     @Override
     public Page<JobResponse> searchJobs(String keyword, Pageable pageable) {
         String search = keyword == null ? "" : keyword.trim();
@@ -42,6 +52,7 @@ public class CandidateServiceImpl implements CandidateService {
         ).map(this::toJobResponse);
     }
 
+    // Ứng viên nộp hồ sơ vào tin tuyển dụng hợp lệ.
     @Override
     @Transactional
     public ApplicationResponse applyJob(ApplicationRequest request) {
@@ -71,6 +82,7 @@ public class CandidateServiceImpl implements CandidateService {
         return toApplicationResponse(applicationRepository.save(application));
     }
 
+    // Lấy danh sách hồ sơ mà ứng viên hiện tại đã nộp.
     @Override
     public Page<ApplicationResponse> getMyApplications(Pageable pageable) {
         User candidate = getCurrentCandidate();
@@ -78,6 +90,55 @@ public class CandidateServiceImpl implements CandidateService {
                 .map(this::toApplicationResponse);
     }
 
+    // Upload CV PDF vào thư mục local và lưu đường dẫn vào tài khoản ứng viên.
+    @Override
+    @Transactional
+    public CvUploadResponse uploadCv(MultipartFile file) {
+        User candidate = getCurrentCandidate();
+        validatePdf(file);
+
+        String originalName = Objects.requireNonNullElse(file.getOriginalFilename(), "cv.pdf");
+        String safeName = originalName.replaceAll("[^a-zA-Z0-9.\\-_]", "_");
+        String fileName = "candidate_" + candidate.getId() + "_" + System.currentTimeMillis() + "_" + safeName;
+        Path uploadDir = Path.of("uploads", "cv");
+        Path target = uploadDir.resolve(fileName);
+
+        try {
+            Files.createDirectories(uploadDir);
+            file.transferTo(target.toFile());
+        } catch (IOException exception) {
+            throw new BadRequestException("Không thể lưu file CV");
+        }
+
+        String cvUrl = "/uploads/cv/" + fileName;
+        candidate.setCvUrl(cvUrl);
+
+        return CvUploadResponse.builder()
+                .candidateId(candidate.getId())
+                .fileName(fileName)
+                .cvUrl(cvUrl)
+                .build();
+    }
+
+    // Kiểm tra file CV: không rỗng, không quá 15MB và phải là PDF.
+    private void validatePdf(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("File CV không được để trống");
+        }
+        if (file.getSize() > MAX_CV_SIZE) {
+            throw new BadRequestException("File CV không được vượt quá 15MB");
+        }
+
+        String contentType = file.getContentType();
+        String originalName = file.getOriginalFilename();
+        boolean isPdfContent = "application/pdf".equalsIgnoreCase(contentType);
+        boolean isPdfName = originalName != null && originalName.toLowerCase().endsWith(".pdf");
+        if (!isPdfContent && !isPdfName) {
+            throw new BadRequestException("Chỉ cho phép upload file PDF");
+        }
+    }
+
+    // Lấy ứng viên đang đăng nhập từ SecurityContext.
     private User getCurrentCandidate() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         CustomUserDetails userDetails = (CustomUserDetails) principal;
@@ -85,6 +146,7 @@ public class CandidateServiceImpl implements CandidateService {
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy ứng viên"));
     }
 
+    // Chuyển entity Job sang JobResponse.
     private JobResponse toJobResponse(Job job) {
         return JobResponse.builder()
                 .id(job.getId())
@@ -101,6 +163,7 @@ public class CandidateServiceImpl implements CandidateService {
                 .build();
     }
 
+    // Chuyển entity Application sang ApplicationResponse.
     private ApplicationResponse toApplicationResponse(Application application) {
         return ApplicationResponse.builder()
                 .id(application.getId())
@@ -110,6 +173,7 @@ public class CandidateServiceImpl implements CandidateService {
                 .candidateName(application.getCandidate().getFullName())
                 .coverLetter(application.getCoverLetter())
                 .cvUrl(application.getCvUrl())
+                .feedback(application.getFeedback())
                 .status(application.getStatus())
                 .appliedAt(application.getAppliedAt())
                 .build();

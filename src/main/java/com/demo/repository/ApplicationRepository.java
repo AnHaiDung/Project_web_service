@@ -11,4 +11,6 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
     boolean existsByJobAndCandidate(Job job, User candidate);
 
     Page<Application> findByCandidate(User candidate, Pageable pageable);
+
+    Page<Application> findByJobEmployer(User employer, Pageable pageable);
 }

@@ -1,7 +1,9 @@
 package com.demo.controller;
 
+import com.demo.model.dto.request.ApplicationStatusUpdateRequest;
 import com.demo.model.dto.request.JobRequest;
 import com.demo.model.dto.response.ApiResponse;
+import com.demo.model.dto.response.ApplicationResponse;
 import com.demo.model.dto.response.JobResponse;
 import com.demo.service.EmployerJobService;
 import jakarta.validation.Valid;
@@ -13,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class EmployerJobController {
     private final EmployerJobService employerJobService;
 
+    // Nhà tuyển dụng xem các tin tuyển dụng do chính mình đăng.
     @GetMapping
     public ResponseEntity<ApiResponse<Page<JobResponse>>> getMyJobs(@PageableDefault(size = 5) Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(
@@ -35,6 +39,7 @@ public class EmployerJobController {
         ));
     }
 
+    // Nhà tuyển dụng đăng tin mới, trạng thái ban đầu là PENDING.
     @PostMapping
     public ResponseEntity<ApiResponse<JobResponse>> createJob(@Valid @RequestBody JobRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
@@ -44,6 +49,7 @@ public class EmployerJobController {
         ));
     }
 
+    // Nhà tuyển dụng cập nhật tin của mình và chờ admin duyệt lại.
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<JobResponse>> updateJob(
             @PathVariable Long id,
@@ -56,12 +62,38 @@ public class EmployerJobController {
         ));
     }
 
+    // Nhà tuyển dụng ẩn tin tuyển dụng của mình.
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteJob(@PathVariable Long id) {
         employerJobService.deleteJob(id);
         return ResponseEntity.ok(ApiResponse.success(
                 "Ẩn tin tuyển dụng thành công",
                 null,
+                HttpStatus.OK.value()
+        ));
+    }
+
+    // Nhà tuyển dụng xem hồ sơ ứng viên nộp vào các tin của mình.
+    @GetMapping("/applications")
+    public ResponseEntity<ApiResponse<Page<ApplicationResponse>>> getApplications(
+            @PageableDefault(size = 5) Pageable pageable
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Lấy danh sách hồ sơ ứng tuyển thành công",
+                employerJobService.getApplications(pageable),
+                HttpStatus.OK.value()
+        ));
+    }
+
+    // Nhà tuyển dụng cập nhật trạng thái và phản hồi cho hồ sơ ứng tuyển.
+    @PatchMapping("/applications/{applicationId}/status")
+    public ResponseEntity<ApiResponse<ApplicationResponse>> updateApplicationStatus(
+            @PathVariable Long applicationId,
+            @Valid @RequestBody ApplicationStatusUpdateRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Cập nhật trạng thái hồ sơ thành công",
+                employerJobService.updateApplicationStatus(applicationId, request),
                 HttpStatus.OK.value()
         ));
     }

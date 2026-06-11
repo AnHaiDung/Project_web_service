@@ -4,6 +4,9 @@ import com.demo.exception.BadRequestException;
 import com.demo.exception.ConflictException;
 import com.demo.exception.ForbiddenException;
 import com.demo.exception.InvalidTokenException;
+import com.demo.exception.NotFoundException;
+import com.demo.model.dto.request.ChangePasswordRequest;
+import com.demo.model.dto.request.ForgotPasswordRequest;
 import com.demo.model.dto.request.LoginRequest;
 import com.demo.model.dto.request.RefreshTokenRequest;
 import com.demo.model.dto.request.RegisterRequest;
@@ -27,6 +30,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -46,6 +50,7 @@ public class AuthServiceImpl implements AuthService {
     @Value("${jwt-refresh-expired}")
     private Long jwtRefreshExpired;
 
+    // Đăng ký tài khoản mới và mã hóa mật khẩu trước khi lưu.
     @Override
     @Transactional
     public UserResponse register(RegisterRequest request) {
@@ -70,6 +75,7 @@ public class AuthServiceImpl implements AuthService {
         return toUserResponse(userRepository.save(user));
     }
 
+    // Xác thực username/password và cấp access token + refresh token.
     @Override
     @Transactional
     public AuthResponse login(LoginRequest request) {
@@ -88,6 +94,7 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    // Kiểm tra refresh token rồi cấp lại access token mới.
     @Override
     @Transactional
     public AuthResponse refresh(RefreshTokenRequest request) {
@@ -108,6 +115,7 @@ public class AuthServiceImpl implements AuthService {
         return toAuthResponse(userDetails, accessToken, refreshToken.getToken());
     }
 
+    // Đăng xuất bằng cách lưu access token vào bảng blacklist.
     @Override
     @Transactional
     public void logout(String accessToken) {
@@ -123,6 +131,30 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    // Đổi mật khẩu cho user đang đăng nhập.
+    @Override
+    @Transactional
+    public void changePassword(ChangePasswordRequest request) {
+        User user = getCurrentUser();
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            throw new BadRequestException("Mật khẩu cũ không đúng");
+        }
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+    }
+
+    // Quên mật khẩu đơn giản: kiểm tra username + email rồi set mật khẩu mới.
+    @Override
+    @Transactional
+    public void forgotPassword(ForgotPasswordRequest request) {
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy tài khoản"));
+        if (!user.getEmail().equalsIgnoreCase(request.getEmail())) {
+            throw new BadRequestException("Email không khớp với tài khoản");
+        }
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+    }
+
+    // Tạo refresh token ngẫu nhiên và lưu vào database.
     private RefreshToken createRefreshToken(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new InvalidTokenException("Tài khoản không tồn tại"));
@@ -135,6 +167,15 @@ public class AuthServiceImpl implements AuthService {
         return refreshTokenRepository.save(refreshToken);
     }
 
+    // Lấy user đang đăng nhập từ SecurityContext.
+    private User getCurrentUser() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        CustomUserDetails userDetails = (CustomUserDetails) principal;
+        return userRepository.findById(userDetails.getId())
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy tài khoản"));
+    }
+
+    // Kiểm tra username, email, phone không bị trùng khi đăng ký.
     private void validateUniqueAccount(RegisterRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new ConflictException("Tên đăng nhập đã tồn tại");
@@ -148,6 +189,7 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    // Chuyển thông tin user và token sang response trả cho client.
     private AuthResponse toAuthResponse(CustomUserDetails userDetails, String accessToken, String refreshToken) {
         return AuthResponse.builder()
                 .userId(userDetails.getId())
@@ -161,6 +203,7 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+    // Chuyển entity User sang UserResponse để không trả password.
     private UserResponse toUserResponse(User user) {
         return UserResponse.builder()
                 .id(user.getId())
@@ -168,11 +211,13 @@ public class AuthServiceImpl implements AuthService {
                 .fullName(user.getFullName())
                 .email(user.getEmail())
                 .phone(user.getPhone())
+                .cvUrl(user.getCvUrl())
                 .role(user.getRole())
                 .enabled(user.getEnabled())
                 .build();
     }
 
+    // Chuyển entity User sang CustomUserDetails để tạo token mới.
     private CustomUserDetails toUserDetails(User user) {
         return CustomUserDetails.builder()
                 .id(user.getId())

@@ -36,6 +36,9 @@ public class Application {
     @Column(length = 500)
     private String cvUrl;
 
+    @Column(columnDefinition = "TEXT")
+    private String feedback;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private ApplicationStatus status;

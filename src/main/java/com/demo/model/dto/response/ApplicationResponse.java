@@ -16,6 +16,7 @@ public class ApplicationResponse {
     private String candidateName;
     private String coverLetter;
     private String cvUrl;
+    private String feedback;
     private ApplicationStatus status;
     private Instant appliedAt;
 }

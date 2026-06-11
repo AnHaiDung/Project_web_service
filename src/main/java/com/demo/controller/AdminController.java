@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminController {
     private final AdminService adminService;
 
+    // Admin xem và tìm kiếm danh sách người dùng, có phân trang.
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<Page<UserResponse>>> getUsers(
             @RequestParam(defaultValue = "") String keyword,
@@ -44,6 +45,7 @@ public class AdminController {
         ));
     }
 
+    // Admin tạo mới người dùng với role được gửi từ request.
     @PostMapping("/users")
     public ResponseEntity<ApiResponse<UserResponse>> createUser(@Valid @RequestBody UserCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
@@ -53,6 +55,7 @@ public class AdminController {
         ));
     }
 
+    // Admin cập nhật thông tin người dùng theo id.
     @PutMapping("/users/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(
             @PathVariable Long id,
@@ -65,6 +68,7 @@ public class AdminController {
         ));
     }
 
+    // Admin khóa tài khoản người dùng bằng cách set enabled = false.
     @DeleteMapping("/users/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable Long id) {
         adminService.deleteUser(id);
@@ -75,6 +79,7 @@ public class AdminController {
         ));
     }
 
+    // Admin xem, tìm kiếm hoặc lọc tin tuyển dụng theo trạng thái.
     @GetMapping("/jobs")
     public ResponseEntity<ApiResponse<Page<JobResponse>>> getJobs(
             @RequestParam(defaultValue = "") String keyword,
@@ -88,6 +93,7 @@ public class AdminController {
         ));
     }
 
+    // Admin duyệt hoặc từ chối tin tuyển dụng.
     @PatchMapping("/jobs/{id}/status")
     public ResponseEntity<ApiResponse<JobResponse>> updateJobStatus(
             @PathVariable Long id,
