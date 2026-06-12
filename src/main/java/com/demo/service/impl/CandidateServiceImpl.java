@@ -28,6 +28,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Objects;
@@ -69,12 +70,15 @@ public class CandidateServiceImpl implements CandidateService {
         if (applicationRepository.existsByJobAndCandidate(job, candidate)) {
             throw new ConflictException("Bạn đã nộp hồ sơ vào tin tuyển dụng này");
         }
+        if (candidate.getCvUrl() == null || candidate.getCvUrl().isBlank()) {
+            throw new BadRequestException("Vui lòng upload CV trước khi nộp hồ sơ");
+        }
 
         Application application = Application.builder()
                 .job(job)
                 .candidate(candidate)
                 .coverLetter(request.getCoverLetter())
-                .cvUrl(request.getCvUrl())
+                .cvUrl(candidate.getCvUrl())
                 .status(ApplicationStatus.PENDING)
                 .appliedAt(Instant.now())
                 .build();
@@ -100,12 +104,12 @@ public class CandidateServiceImpl implements CandidateService {
         String originalName = Objects.requireNonNullElse(file.getOriginalFilename(), "cv.pdf");
         String safeName = originalName.replaceAll("[^a-zA-Z0-9.\\-_]", "_");
         String fileName = "candidate_" + candidate.getId() + "_" + System.currentTimeMillis() + "_" + safeName;
-        Path uploadDir = Path.of("uploads", "cv");
-        Path target = uploadDir.resolve(fileName);
+        Path uploadDir = Path.of("uploads", "cv").toAbsolutePath().normalize();
+        Path target = uploadDir.resolve(fileName).normalize();
 
         try {
             Files.createDirectories(uploadDir);
-            file.transferTo(target.toFile());
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException exception) {
             throw new BadRequestException("Không thể lưu file CV");
         }
